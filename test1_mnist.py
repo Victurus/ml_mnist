@@ -22,6 +22,10 @@ class Configuration():
         self.data_path     = os.path.abspath(data_path)
         self.model_path    = os.path.abspath(model_path)
 
+        self.device = torch.device('cpu')
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+
     def __str__(self):
         res = \
         "Number of epochs :{:<10}\n".format(self.num_epochs) + \
@@ -29,7 +33,8 @@ class Configuration():
         "Batch size       :{:<10}\n".format(self.batch_size) + \
         "Learning_rate    :{:<10}\n".format(self.learning_rate) + \
         "Dataset path     :{:<10}\n".format(self.data_path) + \
-        "Model path       :{:<10}".format(self.model_path)
+        "Model path       :{:<10}\n".format(self.model_path) + \
+        "Proceccing unit  :{:<10}".format(str(self.device).upper())
         return res
 
 class ConvNet(nn.Module):
@@ -52,7 +57,6 @@ class ConvNet(nn.Module):
         out = self.fc2(out)
         return out
 
-
 if __name__ == '__main__':
     # Predefined Parameters
     conf = Configuration()
@@ -68,11 +72,9 @@ if __name__ == '__main__':
     train_loader = DataLoader(dataset=train_dataset, batch_size=conf.batch_size, shuffle=True)
     test_loader = DataLoader(dataset=test_dataset, batch_size=conf.batch_size, shuffle=False)
 
-    if torch.cuda.is_available():
-        torch.device('cuda')
-
     # Model Training
     model = ConvNet()
+    model.to(conf.device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=conf.learning_rate)
 
@@ -83,13 +85,15 @@ if __name__ == '__main__':
 
     for epoch in range(conf.num_epochs):
         for i, (images, labels) in enumerate(train_loader):
-            # Прямой запуск
+            # Forward calculation
+            images = images.to(conf.device)
+            labels = labels.to(conf.device)
             outputs = model(images)
             loss = criterion(outputs, labels)
             loss_list.append(loss.item())
 
             # Back propaganation and optimizer
-            optimizer.zero_grad() # обнуление градиентов для нового расчёта
+            optimizer.zero_grad() # making gradient zero for further calculations
             loss.backward()
             optimizer.step()
 
@@ -102,9 +106,9 @@ if __name__ == '__main__':
             # Training Log
             if (i + 1) % conf.batch_size == 0:
                 log = 'Epoch [{:3}/{:3}] | '.format(epoch + 1, conf.num_epochs)+\
-                      'Step  [{:5}/{:5}] | '.format(i+1, total_step)+\
-                      'Loss: {:10.4f} | '.format(loss.item())+\
-                      'Accuracy: {:10.4f}%'.format((correct / total) * 100)
+                      'Step  [{:4}/{:4}] | '.format(i+1, total_step)+\
+                      'Loss: {:7.4f} | '.format(loss.item())+\
+                      'Accuracy: {:7.4f}%'.format((correct / total) * 100)
                 print(log)
 
     model.eval()
@@ -112,6 +116,7 @@ if __name__ == '__main__':
         correct = 0
         total = 0
         for images, labels in test_loader:
+            images = images.to(conf.device)
             outputs = model(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
